@@ -44,27 +44,29 @@ def train_gan(model, dataloader, epochs=30):
             real_imgs = real_imgs.to(DEVICE)
             z = torch.randn(real_imgs.size(0), model.latent_dim).to(DEVICE)
 
-            optimizer_g.zero_grad()
+            # Discriminator: minimize -log(D(x))-log(1-D(G(z))) <-> maximize log(D(x))+log(1-D(G(z)))
+            optimizer_d.zero_grad()
             fake_imgs = model(z)
+            y_hat_real = model.discriminator(real_imgs)
+            y_real = torch.ones(real_imgs.size(0), 1).to(DEVICE)
+            real_loss = model.adversarial_loss(y_hat_real, y_real)
+
+            y_hat_fake = model.discriminator(fake_imgs)
+            y_fake = torch.zeros(real_imgs.size(0), 1).to(DEVICE)
+            fake_loss = model.adversarial_loss(y_hat_fake, y_fake)
+
+            d_loss = (real_loss + fake_loss) / 2
+            d_loss.backward(retain_graph=True)
+            optimizer_d.step()
+
+            # Generator: minimize -log(D(G(z))) <-> maximize log(D(G(z)))
+            optimizer_g.zero_grad()
             y_hat = model.discriminator(fake_imgs)
             y = torch.ones(real_imgs.size(0), 1).to(DEVICE)
             g_loss = model.adversarial_loss(y_hat, y)
             g_loss.backward()
             optimizer_g.step()
-
-            optimizer_d.zero_grad()
-            y_hat_real = model.discriminator(real_imgs)
-            y_real = torch.ones(real_imgs.size(0), 1).to(DEVICE)
-            real_loss = model.adversarial_loss(y_hat_real, y_real)
-
-            y_hat_fake = model.discriminator(fake_imgs.detach())
-            y_fake = torch.zeros(real_imgs.size(0), 1).to(DEVICE)
-            fake_loss = model.adversarial_loss(y_hat_fake, y_fake)
-
-            d_loss = (real_loss + fake_loss) / 2
-            d_loss.backward()
-            optimizer_d.step()
-
+            
             if batch_idx % 100 == 0:
                 print(f"Epoch: {epoch}, Batch: {batch_idx}, G_loss: {g_loss.item()}, D_loss: {d_loss.item()}")
 
